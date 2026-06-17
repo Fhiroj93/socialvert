@@ -21,18 +21,18 @@ function Landing() {
       <div className="absolute right-4 top-4"><ThemeToggle /></div>
 
       <main className="mx-auto flex min-h-screen max-w-5xl flex-col items-center justify-center px-6 py-16">
-        <div className="mb-10"><Logo size="lg" /></div>
+        <div className="mb-10 sv-float"><Logo size="lg" /></div>
 
-        <h1 className="text-center text-4xl sm:text-5xl font-bold tracking-tight text-foreground max-w-3xl">
+        <h1 className="text-center text-4xl sm:text-5xl font-bold tracking-tight text-foreground max-w-3xl sv-fade-up">
           Welcome to your <span className="sv-gradient-text">Content Dashboard</span>
         </h1>
-        <p className="mt-4 max-w-xl text-center text-base text-muted-foreground">
+        <p className="mt-4 max-w-xl text-center text-base text-muted-foreground sv-fade-up" style={{ animationDelay: "0.15s" }}>
           Choose how you'd like to access the platform today.
         </p>
 
-        <div className="mt-12 grid w-full max-w-3xl grid-cols-1 gap-5 sm:grid-cols-2">
+        <div className="mt-12 grid w-full max-w-3xl grid-cols-1 gap-5 sm:grid-cols-2 sv-stagger">
           <Link to="/manager-login" className="group sv-card-holo rounded-2xl p-7 text-left">
-            <div className="mb-5 grid h-12 w-12 place-items-center rounded-xl bg-primary/10 text-primary">
+            <div className="mb-5 grid h-12 w-12 place-items-center rounded-xl bg-primary/10 text-primary sv-pulse-glow">
               <LayoutDashboard className="h-6 w-6" />
             </div>
             <h2 className="text-xl font-semibold text-foreground">Manager</h2>
@@ -43,7 +43,7 @@ function Landing() {
           </Link>
 
           <Link to="/client-login" className="group sv-card-holo rounded-2xl p-7 text-left">
-            <div className="mb-5 grid h-12 w-12 place-items-center rounded-xl bg-primary/10 text-primary">
+            <div className="mb-5 grid h-12 w-12 place-items-center rounded-xl bg-primary/10 text-primary sv-pulse-glow">
               <Building2 className="h-6 w-6" />
             </div>
             <h2 className="text-xl font-semibold text-foreground">Client</h2>
