@@ -1,6 +1,9 @@
 // Supabase-backed store. Mirrors the previous in-memory hook API so UI components don't change.
 import { useSyncExternalStore } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase as _supabase } from "@/integrations/supabase/client";
+// The generated Database types are for a different project; tables (clients/videos)
+// live in the externally-connected Supabase. Use an untyped handle here.
+const supabase = _supabase as any;
 import type { Client, Video, Platform } from "./types";
 
 // ---- Platform normalization (DB stores proper-case strings) ----
