@@ -1,17 +1,121 @@
-// In-memory mutable store seeded from mockData. Future swap target: Supabase queries.
+// Supabase-backed store. Mirrors the previous in-memory hook API so UI components don't change.
 import { useSyncExternalStore } from "react";
-import { videos as seedVideos, clients as seedClients } from "./mockData";
-import type { Video, Client } from "./types";
+import { supabase } from "@/integrations/supabase/client";
+import type { Client, Video, Platform } from "./types";
 
-let _videos: Video[] = seedVideos.map((v) => ({ ...v, caption_hashtags: [...v.caption_hashtags], platform: [...v.platform] }));
-const _clients: Client[] = seedClients.map((c) => ({ ...c, platforms: [...c.platforms] }));
+// ---- Platform normalization (DB stores proper-case strings) ----
+const PLATFORM_TO_DB: Record<Platform, string> = {
+  instagram: "Instagram",
+  tiktok: "TikTok",
+  youtube: "YouTube Shorts",
+  google: "Google My Business",
+};
+const DB_TO_PLATFORM: Record<string, Platform> = {
+  Instagram: "instagram",
+  TikTok: "tiktok",
+  "YouTube Shorts": "youtube",
+  YouTube: "youtube",
+  "Google My Business": "google",
+  "Google Business": "google",
+  Google: "google",
+};
+const normPlatforms = (arr: string[] | null | undefined): Platform[] =>
+  (arr ?? []).map((p) => DB_TO_PLATFORM[p]).filter(Boolean) as Platform[];
+
+function normClient(row: any): Client {
+  return {
+    id: row.id,
+    name: row.name,
+    slug: row.slug,
+    monthly_quota: row.monthly_quota,
+    platforms: normPlatforms(row.platforms),
+    active: !row.is_demo_only,
+  };
+}
+function normVideo(row: any): Video {
+  return {
+    id: row.id,
+    client_id: row.client_id,
+    title: row.title,
+    content_angle: row.content_angle ?? "",
+    video_type: row.video_type,
+    platform: normPlatforms(row.platform),
+    idea_status: row.idea_status,
+    script_status: row.script_status,
+    script_content: row.script_content ?? "",
+    script_delivery_date: row.script_delivery_date,
+    script_eta: row.script_eta,
+    video_status: row.video_status,
+    video_link: row.video_link,
+    caption_hook: row.caption_hook ?? "",
+    caption_body: row.caption_body ?? "",
+    caption_cta: row.caption_cta ?? "",
+    caption_hashtags: row.caption_hashtags ?? [],
+    posting_date: row.posting_date,
+    posting_platform: row.posting_platform ? (DB_TO_PLATFORM[row.posting_platform] ?? null) : null,
+    posting_status: row.posting_status,
+    views: row.views ?? 0,
+    engagement: row.engagement ?? 0,
+  };
+}
+
+let _videos: Video[] = [];
+let _clients: Client[] = [];
+let _loaded = false;
+let _loading: Promise<void> | null = null;
+let _realtimeSetup = false;
 
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((l) => l());
 
+async function loadOnce() {
+  if (_loaded) return;
+  if (_loading) return _loading;
+  _loading = (async () => {
+    const [{ data: c, error: cErr }, { data: v, error: vErr }] = await Promise.all([
+      supabase.from("clients").select("*").order("name"),
+      supabase.from("videos").select("*"),
+    ]);
+    if (cErr) console.error("[store] clients load", cErr);
+    if (vErr) console.error("[store] videos load", vErr);
+    _clients = (c ?? []).map(normClient);
+    _videos = (v ?? []).map(normVideo);
+    _loaded = true;
+    emit();
+
+    if (!_realtimeSetup && typeof window !== "undefined") {
+      _realtimeSetup = true;
+      supabase
+        .channel("videos-realtime")
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "videos" },
+          (payload: any) => {
+            if (payload.eventType === "INSERT") {
+              const nv = normVideo(payload.new);
+              if (!_videos.some((x) => x.id === nv.id)) _videos = [nv, ..._videos];
+            } else if (payload.eventType === "UPDATE") {
+              const nv = normVideo(payload.new);
+              _videos = _videos.map((x) => (x.id === nv.id ? nv : x));
+            } else if (payload.eventType === "DELETE") {
+              _videos = _videos.filter((x) => x.id !== payload.old?.id);
+            }
+            emit();
+          },
+        )
+        .subscribe();
+    }
+  })();
+  await _loading;
+  _loading = null;
+}
+
 function subscribe(l: () => void) {
   listeners.add(l);
-  return () => listeners.delete(l);
+  void loadOnce();
+  return () => {
+    listeners.delete(l);
+  };
 }
 
 export function useVideos(): Video[] {
@@ -21,14 +125,66 @@ export function useClients(): Client[] {
   return useSyncExternalStore(subscribe, () => _clients, () => _clients);
 }
 
-export function updateVideo(id: string, patch: Partial<Video>) {
-  _videos = _videos.map((v) => (v.id === id ? { ...v, ...patch } : v));
-  emit();
+// One-shot fetcher for loaders (non-reactive).
+export async function fetchClientBySlug(slug: string): Promise<Client | null> {
+  const cached = _clients.find((c) => c.slug === slug);
+  if (cached) return cached;
+  const { data, error } = await supabase.from("clients").select("*").eq("slug", slug).maybeSingle();
+  if (error || !data) return null;
+  return normClient(data);
 }
 
-export function addVideo(v: Video) {
-  _videos = [v, ..._videos];
+export async function updateVideo(id: string, patch: Partial<Video>) {
+  // Optimistic local update
+  _videos = _videos.map((v) => (v.id === id ? { ...v, ...patch } : v));
   emit();
+
+  const dbPatch: Record<string, any> = { ...patch };
+  if (patch.platform) dbPatch.platform = patch.platform.map((p) => PLATFORM_TO_DB[p]);
+  if ("posting_platform" in patch) {
+    dbPatch.posting_platform = patch.posting_platform ? PLATFORM_TO_DB[patch.posting_platform] : null;
+  }
+
+  const { error } = await supabase.from("videos").update(dbPatch).eq("id", id);
+  if (error) console.error("[store] updateVideo", error);
+}
+
+export async function addVideo(v: Video) {
+  const dbRow = {
+    client_id: v.client_id,
+    title: v.title,
+    content_angle: v.content_angle,
+    video_type: v.video_type,
+    platform: v.platform.map((p) => PLATFORM_TO_DB[p]),
+    idea_status: v.idea_status,
+    script_status: v.script_status,
+    script_content: v.script_content,
+    script_delivery_date: v.script_delivery_date,
+    script_eta: v.script_eta,
+    video_status: v.video_status,
+    video_link: v.video_link,
+    caption_hook: v.caption_hook,
+    caption_body: v.caption_body,
+    caption_cta: v.caption_cta,
+    caption_hashtags: v.caption_hashtags,
+    posting_date: v.posting_date,
+    posting_platform: v.posting_platform ? PLATFORM_TO_DB[v.posting_platform] : null,
+    posting_status: v.posting_status,
+    views: v.views,
+    engagement: v.engagement,
+  };
+  const { data, error } = await supabase.from("videos").insert(dbRow).select().single();
+  if (error) {
+    console.error("[store] addVideo", error);
+    return;
+  }
+  if (data) {
+    const nv = normVideo(data);
+    if (!_videos.some((x) => x.id === nv.id)) {
+      _videos = [nv, ..._videos];
+      emit();
+    }
+  }
 }
 
 export const DEMO_MANAGER_PASSCODE = "socialvert2025";
