@@ -9,8 +9,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { getClientBySlug, deriveStages, currentStageLabel } from "@/lib/mockData";
-import { useVideos, updateVideo } from "@/lib/store";
+import { deriveStages, currentStageLabel } from "@/lib/mockData";
+import { useVideos, useClients, updateVideo, fetchClientBySlug } from "@/lib/store";
 import { StageTracker } from "@/components/sv/StageTracker";
 import { QuotaRing } from "@/components/sv/QuotaRing";
 import { PlatformIcon, PlatformList } from "@/components/sv/PlatformIcon";
@@ -24,24 +24,35 @@ export const Route = createFileRoute("/client/$slug")({
   head: ({ params }) => ({
     meta: [{ title: `${params.slug} — Socialvert Client Dashboard` }],
   }),
-  loader: ({ params }) => {
-    const client = getClientBySlug(params.slug);
+  loader: async ({ params }) => {
+    const client = await fetchClientBySlug(params.slug);
     if (!client || !client.active) throw notFound();
     return { client };
   },
   component: ClientDashboard,
+  errorComponent: ({ error }) => (
+    <div className="grid min-h-screen place-items-center px-4 text-center">
+      <div>
+        <h1 className="text-2xl font-semibold">Something went wrong</h1>
+        <p className="mt-2 text-sm text-muted-foreground">{error.message}</p>
+      </div>
+    </div>
+  ),
   notFoundComponent: () => (
     <div className="grid min-h-screen place-items-center px-4 text-center">
       <div>
         <h1 className="text-2xl font-semibold">Client not found</h1>
-        <p className="mt-2 text-sm text-muted-foreground">That account doesn't exist in this demo.</p>
+        <p className="mt-2 text-sm text-muted-foreground">That account doesn't exist.</p>
       </div>
     </div>
   ),
 });
 
 function ClientDashboard() {
-  const { client } = Route.useLoaderData();
+  const { client: loaderClient } = Route.useLoaderData();
+  // Prefer the live store version (gets realtime updates); fall back to loader copy.
+  const liveClient = useClients().find((c) => c.id === loaderClient.id);
+  const client = liveClient ?? loaderClient;
   const allVideos = useVideos();
   const videos = useMemo(() => allVideos.filter((v) => v.client_id === client.id), [allVideos, client.id]);
 

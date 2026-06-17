@@ -3,7 +3,7 @@ import { Logo } from "@/components/sv/Logo";
 import { ThemeToggle } from "@/components/sv/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Building2, ArrowRight } from "lucide-react";
-import { getActiveClients } from "@/lib/mockData";
+import { useClients } from "@/lib/store";
 import { PlatformList } from "@/components/sv/PlatformIcon";
 
 export const Route = createFileRoute("/client-login")({
@@ -13,7 +13,7 @@ export const Route = createFileRoute("/client-login")({
 
 function ClientLogin() {
   const navigate = useNavigate();
-  const list = getActiveClients();
+  const list = useClients().filter((c) => c.active);
 
   return (
     <div className="min-h-screen px-4 py-12">
