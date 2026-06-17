@@ -64,8 +64,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:card", content: "summary" },
       { name: "twitter:title", content: "Socialvert — Content Dashboard" },
       { name: "twitter:description", content: "Premium content pipeline dashboard for agencies and their clients." },
-      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/ad022c7c-28b2-4ff4-be8d-9b6c65ce89d1/id-preview-74fcb918--1878558a-080c-4166-81a9-6db6c8dddcea.lovable.app-1781691355269.png" },
-      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/ad022c7c-28b2-4ff4-be8d-9b6c65ce89d1/id-preview-74fcb918--1878558a-080c-4166-81a9-6db6c8dddcea.lovable.app-1781691355269.png" },
+      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/lxjvC4JdmuYcdPb2wXGNvkarbQT2/social-images/social-1781723186322-Screenshot_2026-06-18_003551.webp" },
+      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/lxjvC4JdmuYcdPb2wXGNvkarbQT2/social-images/social-1781723186322-Screenshot_2026-06-18_003551.webp" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
