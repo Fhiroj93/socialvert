@@ -1,8 +1,6 @@
 // Supabase-backed store. Mirrors the previous in-memory hook API so UI components don't change.
 import { useSyncExternalStore } from "react";
 import { supabase as _supabase } from "@/integrations/supabase/client";
-// The generated Database types are for a different project; tables (clients/videos)
-// live in the externally-connected Supabase. Use an untyped handle here.
 const supabase = _supabase as any;
 import type { Client, Video, Platform } from "./types";
 
@@ -33,6 +31,7 @@ function normClient(row: any): Client {
     monthly_quota: row.monthly_quota,
     platforms: normPlatforms(row.platforms),
     active: !row.is_demo_only,
+    last_activity: null,
   };
 }
 function normVideo(row: any): Video {
@@ -59,6 +58,9 @@ function normVideo(row: any): Video {
     posting_status: row.posting_status,
     views: row.views ?? 0,
     engagement: row.engagement ?? 0,
+    client_approval_status: row.client_approval_status ?? null,
+    client_feedback: row.client_feedback ?? null,
+    updated_at: row.updated_at ?? null,
   };
 }
 
@@ -67,9 +69,45 @@ let _clients: Client[] = [];
 let _loaded = false;
 let _loading: Promise<void> | null = null;
 let _realtimeSetup = false;
+let _recentlyUpdated = new Set<string>();
+const _pulseTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((l) => l());
+
+function recomputeClientActivity() {
+  const lastByClient = new Map<string, string>();
+  for (const v of _videos) {
+    if (!v.updated_at) continue;
+    const prev = lastByClient.get(v.client_id);
+    if (!prev || v.updated_at > prev) lastByClient.set(v.client_id, v.updated_at);
+  }
+  _clients = _clients.map((c) => ({ ...c, last_activity: lastByClient.get(c.id) ?? null }));
+  _clients = [..._clients].sort((a, b) => {
+    // active first, then by most recent activity desc
+    if (a.active !== b.active) return a.active ? -1 : 1;
+    const la = a.last_activity ?? "";
+    const lb = b.last_activity ?? "";
+    if (la === lb) return a.name.localeCompare(b.name);
+    return la < lb ? 1 : -1;
+  });
+}
+
+function flagPulse(id: string) {
+  _recentlyUpdated = new Set(_recentlyUpdated);
+  _recentlyUpdated.add(id);
+  const prev = _pulseTimers.get(id);
+  if (prev) clearTimeout(prev);
+  _pulseTimers.set(
+    id,
+    setTimeout(() => {
+      _recentlyUpdated = new Set(_recentlyUpdated);
+      _recentlyUpdated.delete(id);
+      _pulseTimers.delete(id);
+      emit();
+    }, 2500),
+  );
+}
 
 async function loadOnce() {
   if (_loaded) return;
@@ -83,6 +121,7 @@ async function loadOnce() {
     if (vErr) console.error("[store] videos load", vErr);
     _clients = (c ?? []).map(normClient);
     _videos = (v ?? []).map(normVideo);
+    recomputeClientActivity();
     _loaded = true;
     emit();
 
@@ -97,12 +136,15 @@ async function loadOnce() {
             if (payload.eventType === "INSERT") {
               const nv = normVideo(payload.new);
               if (!_videos.some((x) => x.id === nv.id)) _videos = [nv, ..._videos];
+              flagPulse(nv.id);
             } else if (payload.eventType === "UPDATE") {
               const nv = normVideo(payload.new);
               _videos = _videos.map((x) => (x.id === nv.id ? nv : x));
+              flagPulse(nv.id);
             } else if (payload.eventType === "DELETE") {
               _videos = _videos.filter((x) => x.id !== payload.old?.id);
             }
+            recomputeClientActivity();
             emit();
           },
         )
@@ -127,8 +169,10 @@ export function useVideos(): Video[] {
 export function useClients(): Client[] {
   return useSyncExternalStore(subscribe, () => _clients, () => _clients);
 }
+export function useRecentlyUpdated(): Set<string> {
+  return useSyncExternalStore(subscribe, () => _recentlyUpdated, () => _recentlyUpdated);
+}
 
-// One-shot fetcher for loaders (non-reactive).
 export async function fetchClientBySlug(slug: string): Promise<Client | null> {
   const cached = _clients.find((c) => c.slug === slug);
   if (cached) return cached;
@@ -138,8 +182,10 @@ export async function fetchClientBySlug(slug: string): Promise<Client | null> {
 }
 
 export async function updateVideo(id: string, patch: Partial<Video>) {
-  // Optimistic local update
-  _videos = _videos.map((v) => (v.id === id ? { ...v, ...patch } : v));
+  const nowIso = new Date().toISOString();
+  _videos = _videos.map((v) => (v.id === id ? { ...v, ...patch, updated_at: nowIso } : v));
+  flagPulse(id);
+  recomputeClientActivity();
   emit();
 
   const dbPatch: Record<string, any> = { ...patch };
@@ -147,6 +193,8 @@ export async function updateVideo(id: string, patch: Partial<Video>) {
   if ("posting_platform" in patch) {
     dbPatch.posting_platform = patch.posting_platform ? PLATFORM_TO_DB[patch.posting_platform] : null;
   }
+  // updated_at handled by DB trigger if present; don't send.
+  delete dbPatch.updated_at;
 
   const { error } = await supabase.from("videos").update(dbPatch).eq("id", id);
   if (error) console.error("[store] updateVideo", error);
@@ -185,6 +233,7 @@ export async function addVideo(v: Video) {
     const nv = normVideo(data);
     if (!_videos.some((x) => x.id === nv.id)) {
       _videos = [nv, ..._videos];
+      recomputeClientActivity();
       emit();
     }
   }
