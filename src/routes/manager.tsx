@@ -1,7 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { Navbar } from "@/components/sv/Navbar";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DashboardShell, SectionView, type ShellSection } from "@/components/sv/DashboardShell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,14 +12,20 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
-import { useClients, useVideos, updateVideo, addVideo } from "@/lib/store";
+import { useClients, useVideos, updateVideo, addVideo, useRecentlyUpdated } from "@/lib/store";
 import { deriveStages, currentStageLabel } from "@/lib/mockData";
 import { StageTracker } from "@/components/sv/StageTracker";
 import { PlatformIcon, PlatformList } from "@/components/sv/PlatformIcon";
 import { PostingBadge, VideoProductionBadge } from "@/components/sv/StatusBadge";
+import { ActionButton } from "@/components/sv/ActionButton";
+import { CalendarBoard } from "@/components/sv/CalendarBoard";
 import type { Platform, Video, VideoType, VideoProductionStatus } from "@/lib/types";
-import { Plus, Sparkles, Lock, ExternalLink, CheckCircle2, CalendarDays } from "lucide-react";
+import {
+  Plus, Sparkles, Lock, CheckCircle2, CalendarDays,
+  LayoutDashboard, Users, ListChecks, FileText, Clapperboard, BarChart3,
+} from "lucide-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/manager")({
   head: () => ({ meta: [{ title: "Manager Dashboard — Socialvert" }] }),
@@ -29,205 +34,235 @@ export const Route = createFileRoute("/manager")({
 
 const ALL_PLATFORMS: Platform[] = ["instagram", "tiktok", "youtube", "google"];
 
+const SECTIONS: ShellSection[] = [
+  { id: "overview", label: "Overview", icon: LayoutDashboard },
+  { id: "clients", label: "Clients", icon: Users },
+  { id: "pipeline", label: "Pipeline", icon: ListChecks },
+  { id: "scripts", label: "Scripts", icon: FileText },
+  { id: "production", label: "Video", icon: Clapperboard },
+  { id: "captions", label: "Captions & Schedule", icon: CalendarDays },
+  { id: "analytics", label: "Analytics", icon: BarChart3 },
+];
+
 function ManagerDashboard() {
   const clients = useClients();
   const videos = useVideos();
   const activeClients = clients.filter((c) => c.active);
   const [selectedClientId, setSelectedClientId] = useState(activeClients[0]?.id ?? "");
-  const [tab, setTab] = useState("overview");
+  const [section, setSection] = useState("overview");
 
-  const clientVideos = useMemo(() => videos.filter((v) => v.client_id === selectedClientId), [videos, selectedClientId]);
+  // Keep selection valid as clients load
+  if (!selectedClientId && activeClients[0]) {
+    setSelectedClientId(activeClients[0].id);
+  }
+
+  const clientVideos = useMemo(
+    () => videos.filter((v) => v.client_id === selectedClientId),
+    [videos, selectedClientId],
+  );
 
   const totals = useMemo(() => {
     const activeVids = videos.filter((v) => activeClients.some((c) => c.id === v.client_id));
     return {
-      activeClients: clients.length,
+      activeClients: activeClients.length,
       totalThisMonth: activeVids.length,
       completed: activeVids.filter((v) => v.posting_status === "posted").length,
       inProgress: activeVids.filter((v) => v.posting_status !== "posted").length,
     };
-  }, [videos, activeClients, clients]);
+  }, [videos, activeClients]);
 
   function handleClientRowClick(id: string, active: boolean) {
     if (!active) { toast.info("Demo client", { description: "No live data for this account." }); return; }
-    setSelectedClientId(id); setTab("pipeline");
+    setSelectedClientId(id);
+    setSection("pipeline");
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <Navbar label="Manager Dashboard" />
-
-      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
-        <Tabs value={tab} onValueChange={setTab} className="w-full">
-          <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
-            <TabsList className="inline-flex w-auto">
-              <TabsTrigger value="overview">Overview</TabsTrigger>
-              <TabsTrigger value="clients">Clients</TabsTrigger>
-              <TabsTrigger value="pipeline">Pipeline</TabsTrigger>
-              <TabsTrigger value="scripts">Scripts</TabsTrigger>
-              <TabsTrigger value="production">Video</TabsTrigger>
-              <TabsTrigger value="captions">Captions & Schedule</TabsTrigger>
-              <TabsTrigger value="analytics">Analytics</TabsTrigger>
-            </TabsList>
+    <DashboardShell label="Manager Dashboard" sections={SECTIONS} current={section} onSelect={setSection}>
+      {/* OVERVIEW */}
+      <SectionView id="overview" current={section}>
+        <div className="space-y-6">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4 sv-stagger">
+            <StatCard label="Active clients" value={totals.activeClients} />
+            <StatCard label="Videos this month" value={totals.totalThisMonth} />
+            <StatCard label="Completed" value={totals.completed} accent="success" />
+            <StatCard label="In progress" value={totals.inProgress} accent="primary" />
           </div>
 
-          {/* OVERVIEW */}
-          <TabsContent value="overview" className="mt-6 space-y-6">
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
-              <StatCard label="Active clients" value={totals.activeClients} />
-              <StatCard label="Videos this month" value={totals.totalThisMonth} />
-              <StatCard label="Completed" value={totals.completed} accent="success" />
-              <StatCard label="In progress" value={totals.inProgress} accent="primary" />
-            </div>
-
-            <Card className="sv-card-holo">
-              <CardHeader><CardTitle className="text-base">All clients</CardTitle></CardHeader>
-              <CardContent className="p-0">
-                <div className="divide-y divide-border">
-                  {clients.map((c) => {
-                    const cv = videos.filter((v) => v.client_id === c.id);
-                    const done = cv.filter((v) => v.posting_status === "posted").length;
-                    const pct = c.active && cv.length ? Math.round((done / c.monthly_quota) * 100) : 0;
-                    return (
-                      <div
-                        key={c.id}
-                        onClick={() => handleClientRowClick(c.id, c.active)}
-                        className={`flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:gap-4 ${c.active ? "cursor-pointer hover:bg-accent/40" : "opacity-60"}`}
-                      >
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium truncate">{c.name}</span>
-                            {!c.active && <Badge variant="secondary" className="gap-1 text-[10px]"><Lock className="h-3 w-3" /> Demo</Badge>}
-                          </div>
-                          <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
-                            <span>{c.monthly_quota}/mo</span>
-                            <PlatformList platforms={c.platforms} className="h-3.5 w-3.5" />
-                          </div>
+          <Card className="sv-card-holo">
+            <CardHeader><CardTitle className="font-display text-xl">All clients</CardTitle></CardHeader>
+            <CardContent className="p-0">
+              <div className="divide-y divide-border">
+                {clients.map((c) => {
+                  const cv = videos.filter((v) => v.client_id === c.id);
+                  const done = cv.filter((v) => v.posting_status === "posted").length;
+                  const pct = c.active && cv.length ? Math.round((done / c.monthly_quota) * 100) : 0;
+                  return (
+                    <div
+                      key={c.id}
+                      onClick={() => handleClientRowClick(c.id, c.active)}
+                      className={`flex flex-col gap-3 px-4 py-3 transition-colors sm:flex-row sm:items-center sm:gap-4 ${c.active ? "cursor-pointer hover:bg-accent/50" : "opacity-60"}`}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="truncate font-medium">{c.name}</span>
+                          {!c.active && <Badge variant="secondary" className="gap-1 text-[10px]"><Lock className="h-3 w-3" /> Demo</Badge>}
                         </div>
-                        <div className="flex items-center gap-3 sm:w-64">
-                          <Progress value={c.active ? pct : 0} className="h-2 flex-1" />
-                          <span className="w-10 text-right text-xs tabular-nums text-muted-foreground">{c.active ? `${pct}%` : "—"}</span>
+                        <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
+                          <span>{c.monthly_quota}/mo</span>
+                          <PlatformList platforms={c.platforms} className="h-3.5 w-3.5" />
+                          {c.last_activity && <span>· Updated {new Date(c.last_activity).toLocaleDateString()}</span>}
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
+                      <div className="flex items-center gap-3 sm:w-64">
+                        <Progress value={c.active ? pct : 0} className="h-2 flex-1" />
+                        <span className="w-10 text-right text-xs tabular-nums text-muted-foreground">{c.active ? `${pct}%` : "—"}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </SectionView>
 
-          {/* CLIENTS */}
-          <TabsContent value="clients" className="mt-6">
-            <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <h2 className="text-lg font-semibold">Select a client</h2>
-              <ClientPicker clients={activeClients} value={selectedClientId} onChange={setSelectedClientId} />
-            </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              {activeClients.map((c) => (
-                <button key={c.id} onClick={() => { setSelectedClientId(c.id); setTab("pipeline"); }}
-                  className={`sv-card-holo rounded-2xl p-5 text-left ${selectedClientId === c.id ? "ring-2 ring-primary" : ""}`}>
-                  <div className="font-semibold">{c.name}</div>
-                  <div className="mt-1 text-xs text-muted-foreground">{c.monthly_quota} videos / month</div>
-                  <div className="mt-3"><PlatformList platforms={c.platforms} /></div>
-                </button>
-              ))}
-            </div>
-          </TabsContent>
+      {/* CLIENTS */}
+      <SectionView id="clients" current={section}>
+        <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="font-display text-2xl font-semibold">Select a client</h2>
+          <ClientPicker clients={activeClients} value={selectedClientId} onChange={setSelectedClientId} />
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sv-stagger">
+          {activeClients.map((c) => (
+            <button
+              key={c.id}
+              onClick={() => { setSelectedClientId(c.id); setSection("pipeline"); }}
+              className={`sv-card-holo rounded-2xl p-5 text-left transition-transform hover:-translate-y-1 ${selectedClientId === c.id ? "ring-2 ring-primary" : ""}`}
+            >
+              <div className="font-display text-lg font-semibold">{c.name}</div>
+              <div className="mt-1 text-xs text-muted-foreground">{c.monthly_quota} videos / month</div>
+              <div className="mt-3"><PlatformList platforms={c.platforms} /></div>
+            </button>
+          ))}
+        </div>
+      </SectionView>
 
-          {/* PIPELINE */}
-          <TabsContent value="pipeline" className="mt-6 space-y-5">
-            <SelectedClientBanner clients={activeClients} value={selectedClientId} onChange={setSelectedClientId}>
-              <NewContentIdeaDialog clientId={selectedClientId} />
-            </SelectedClientBanner>
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+      {/* PIPELINE */}
+      <SectionView id="pipeline" current={section}>
+        <div className="space-y-5">
+          <SelectedClientBanner clients={activeClients} value={selectedClientId} onChange={setSelectedClientId}>
+            <NewContentIdeaDialog clientId={selectedClientId} />
+          </SelectedClientBanner>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 sv-stagger">
+            {clientVideos.map((v) => <ManagerPipelineCard key={v.id} v={v} />)}
+            {clientVideos.length === 0 && <EmptyState text="No videos yet for this client." />}
+          </div>
+        </div>
+      </SectionView>
+
+      {/* SCRIPTS */}
+      <SectionView id="scripts" current={section}>
+        <div className="space-y-5">
+          <SelectedClientBanner clients={activeClients} value={selectedClientId} onChange={setSelectedClientId} />
+          <div className="space-y-3">
+            {clientVideos.map((v) => <ScriptRow key={v.id} v={v} />)}
+          </div>
+        </div>
+      </SectionView>
+
+      {/* PRODUCTION */}
+      <SectionView id="production" current={section}>
+        <div className="space-y-5">
+          <SelectedClientBanner clients={activeClients} value={selectedClientId} onChange={setSelectedClientId} />
+          <Card className="sv-card-holo">
+            <CardContent className="divide-y divide-border p-0">
               {clientVideos.map((v) => (
-                <Card key={v.id} className="sv-card-holo">
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <div className="font-medium truncate">{v.title}</div>
-                        <div className="mt-1 text-xs text-muted-foreground">{currentStageLabel(v)}</div>
-                      </div>
-                      <Badge variant="secondary" className="capitalize text-[10px]">{v.video_type}</Badge>
-                    </div>
-                    <div className="mt-4"><StageTracker stages={deriveStages(v)} /></div>
-                    <div className="mt-3 flex items-center justify-between">
-                      <PlatformList platforms={v.platform} />
-                      <PostingBadge status={v.posting_status} />
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-              {clientVideos.length === 0 && <EmptyState text="No videos yet for this client." />}
-            </div>
-          </TabsContent>
-
-          {/* SCRIPTS */}
-          <TabsContent value="scripts" className="mt-6 space-y-5">
-            <SelectedClientBanner clients={activeClients} value={selectedClientId} onChange={setSelectedClientId} />
-            <div className="space-y-3">
-              {clientVideos.map((v) => <ScriptRow key={v.id} v={v} />)}
-            </div>
-          </TabsContent>
-
-          {/* PRODUCTION */}
-          <TabsContent value="production" className="mt-6 space-y-5">
-            <SelectedClientBanner clients={activeClients} value={selectedClientId} onChange={setSelectedClientId} />
-            <Card className="sv-card-holo">
-              <CardContent className="divide-y divide-border p-0">
-                {clientVideos.map((v) => (
-                  <div key={v.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium truncate">{v.title}</div>
-                      <div className="mt-1"><VideoProductionBadge status={v.video_status} /></div>
-                    </div>
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                      <Select value={v.video_status} onValueChange={(s) => updateVideo(v.id, { video_status: s as VideoProductionStatus })}>
-                        <SelectTrigger className="w-full sm:w-44"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="awaiting_recording">Awaiting recording</SelectItem>
-                          <SelectItem value="in_editing">In editing</SelectItem>
-                          <SelectItem value="ready">Ready</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <Input
-                        placeholder="Video link (Drive / Frame.io)"
-                        value={v.video_link ?? ""}
-                        onChange={(e) => updateVideo(v.id, { video_link: e.target.value || null })}
-                        className="w-full sm:w-72"
-                      />
-                    </div>
+                <div key={v.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
+                  <div className="flex-1 min-w-0">
+                    <div className="truncate font-medium">{v.title}</div>
+                    <div className="mt-1"><VideoProductionBadge status={v.video_status} /></div>
                   </div>
-                ))}
-              </CardContent>
-            </Card>
-          </TabsContent>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <Select value={v.video_status} onValueChange={(s) => updateVideo(v.id, { video_status: s as VideoProductionStatus })}>
+                      <SelectTrigger className="w-full sm:w-44"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="awaiting_recording">Awaiting recording</SelectItem>
+                        <SelectItem value="in_editing">In editing</SelectItem>
+                        <SelectItem value="ready">Ready</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      placeholder="Video link (Drive / Frame.io / YouTube)"
+                      value={v.video_link ?? ""}
+                      onChange={(e) => updateVideo(v.id, { video_link: e.target.value || null })}
+                      className="w-full sm:w-72"
+                    />
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        </div>
+      </SectionView>
 
-          {/* CAPTIONS + SCHEDULE */}
-          <TabsContent value="captions" className="mt-6 space-y-5">
-            <SelectedClientBanner clients={activeClients} value={selectedClientId} onChange={setSelectedClientId} />
-            <div className="space-y-4">
-              {clientVideos.map((v) => <CaptionScheduleCard key={v.id} v={v} />)}
-            </div>
-          </TabsContent>
+      {/* CAPTIONS + SCHEDULE */}
+      <SectionView id="captions" current={section}>
+        <div className="space-y-5">
+          <SelectedClientBanner clients={activeClients} value={selectedClientId} onChange={setSelectedClientId} />
+          <CalendarBoard videos={clientVideos} />
+          <div className="space-y-4">
+            {clientVideos.map((v) => <CaptionScheduleCard key={v.id} v={v} />)}
+          </div>
+        </div>
+      </SectionView>
 
-          {/* ANALYTICS */}
-          <TabsContent value="analytics" className="mt-6 space-y-5">
-            <ManagerAnalytics />
-          </TabsContent>
-        </Tabs>
-      </main>
-    </div>
+      {/* ANALYTICS */}
+      <SectionView id="analytics" current={section}>
+        <ManagerAnalytics />
+      </SectionView>
+    </DashboardShell>
   );
 }
 
-function StatCard({ label, value, accent }: { label: string; value: number; accent?: "primary"|"success" }) {
+function ManagerPipelineCard({ v }: { v: Video }) {
+  const recent = useRecentlyUpdated();
+  const pulse = recent.has(v.id);
+  return (
+    <Card className={cn("sv-card-holo transition-all", pulse && "sv-update-pulse")}>
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className="truncate font-medium">{v.title}</div>
+            <div className="mt-1 text-xs text-muted-foreground">{currentStageLabel(v)}</div>
+          </div>
+          <Badge variant="secondary" className="text-[10px] capitalize">{v.video_type}</Badge>
+        </div>
+        <div className="mt-4"><StageTracker stages={deriveStages(v)} /></div>
+        <div className="mt-3 flex items-center justify-between">
+          <PlatformList platforms={v.platform} />
+          <div className="flex items-center gap-1.5">
+            {v.client_approval_status === "approved" && (
+              <Badge variant="outline" className="border-success/40 bg-success/10 text-success text-[10px]">Client approved</Badge>
+            )}
+            {v.client_approval_status === "changes_requested" && (
+              <Badge variant="outline" className="border-warning/40 bg-warning/10 text-[10px]">Changes requested</Badge>
+            )}
+            <PostingBadge status={v.posting_status} />
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function StatCard({ label, value, accent }: { label: string; value: number; accent?: "primary" | "success" }) {
   const accentCls = accent === "primary" ? "text-primary" : accent === "success" ? "text-success" : "text-foreground";
   return (
-    <Card className="sv-card-holo">
+    <Card className="sv-card-holo transition-transform hover:-translate-y-1">
       <CardContent className="p-4 sm:p-5">
-        <div className="text-xs uppercase tracking-wider text-muted-foreground">{label}</div>
-        <div className={`mt-1 text-3xl font-bold tabular-nums ${accentCls}`}>{value}</div>
+        <div className="text-[11px] uppercase tracking-wider text-muted-foreground">{label}</div>
+        <div className={`mt-1 font-display text-4xl font-bold tabular-nums ${accentCls}`}>{value}</div>
       </CardContent>
     </Card>
   );
@@ -254,7 +289,7 @@ function SelectedClientBanner({ clients, value, onChange, children }: {
   const c = clients.find((x) => x.id === value);
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-border bg-accent/30 p-3 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <span className="text-xs uppercase tracking-wider text-muted-foreground">Client</span>
         <ClientPicker clients={clients} value={value} onChange={onChange} />
         {c && <PlatformList platforms={c.platforms} />}
@@ -282,6 +317,7 @@ function NewContentIdeaDialog({ clientId }: { clientId: string }) {
       caption_hook: "", caption_body: "", caption_cta: "", caption_hashtags: [],
       posting_date: null, posting_platform: null, posting_status: "pending",
       views: 0, engagement: 0,
+      client_approval_status: null, client_feedback: null, updated_at: null,
     };
     addVideo(v);
     toast.success("Idea added to pipeline");
@@ -290,9 +326,9 @@ function NewContentIdeaDialog({ clientId }: { clientId: string }) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild><Button><Plus className="mr-1.5 h-4 w-4" /> New content idea</Button></DialogTrigger>
+      <DialogTrigger asChild><Button className="transition-transform hover:-translate-y-0.5 active:translate-y-0"><Plus className="mr-1.5 h-4 w-4" /> New content idea</Button></DialogTrigger>
       <DialogContent className="max-w-lg">
-        <DialogHeader><DialogTitle className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-primary" /> New content idea</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle className="flex items-center gap-2 font-display text-2xl"><Sparkles className="h-4 w-4 text-primary" /> New content idea</DialogTitle></DialogHeader>
         <div className="space-y-4 py-2">
           <div className="space-y-1.5"><Label>Video title</Label><Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. 3 Mistakes After a Car Accident" /></div>
           <div className="space-y-1.5"><Label>Content angle</Label><Textarea value={angle} onChange={(e) => setAngle(e.target.value)} rows={3} placeholder="What's the hook? What's the takeaway?" /></div>
@@ -330,24 +366,26 @@ function ScriptRow({ v }: { v: Video }) {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState(v.script_content);
   const [eta, setEta] = useState(v.script_eta ?? "");
+  const recent = useRecentlyUpdated();
+  const pulse = recent.has(v.id);
 
-  function markComplete() {
+  async function markComplete() {
     const today = new Date().toISOString().slice(0, 10);
-    updateVideo(v.id, { script_content: text, script_status: "complete", script_delivery_date: today, script_eta: null });
+    await updateVideo(v.id, { script_content: text, script_status: "complete", script_delivery_date: today, script_eta: null });
     toast.success("Script marked complete");
     setOpen(false);
   }
-  function saveDraft() {
-    updateVideo(v.id, { script_content: text, script_eta: eta || null, script_status: text.trim() ? "in_progress" : "not_started" });
-    toast.success("Saved");
+  async function saveDraft() {
+    await updateVideo(v.id, { script_content: text, script_eta: eta || null, script_status: text.trim() ? "in_progress" : "not_started" });
+    toast.success("Draft saved");
   }
 
   return (
-    <Card className="sv-card-holo">
+    <Card className={cn("sv-card-holo", pulse && "sv-update-pulse")}>
       <CardContent className="p-4">
         <button className="flex w-full items-center justify-between gap-3 text-left" onClick={() => setOpen((o) => !o)}>
           <div className="min-w-0">
-            <div className="font-medium truncate">{v.title}</div>
+            <div className="truncate font-medium">{v.title}</div>
             <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
               {v.script_status === "complete" ? (
                 <span className="inline-flex items-center gap-1 text-success"><CheckCircle2 className="h-3 w-3" /> Delivered {v.script_delivery_date}</span>
@@ -358,10 +396,10 @@ function ScriptRow({ v }: { v: Video }) {
               )}
             </div>
           </div>
-          <Badge variant="outline" className="capitalize text-[10px]">{v.script_status.replace("_", " ")}</Badge>
+          <Badge variant="outline" className="text-[10px] capitalize">{v.script_status.replace("_", " ")}</Badge>
         </button>
         {open && (
-          <div className="mt-4 space-y-3 border-t border-border pt-4">
+          <div className="mt-4 space-y-3 border-t border-border pt-4 animate-in fade-in slide-in-from-top-1 duration-200">
             <div className="space-y-1.5"><Label>Script</Label><Textarea rows={8} value={text} onChange={(e) => setText(e.target.value)} placeholder="HOOK:&#10;BODY:&#10;CTA:" /></div>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div className="space-y-1.5">
@@ -369,8 +407,8 @@ function ScriptRow({ v }: { v: Video }) {
                 <Input type="date" value={eta} onChange={(e) => setEta(e.target.value)} className="w-44" />
               </div>
               <div className="flex gap-2">
-                <Button variant="ghost" onClick={saveDraft}>Save draft</Button>
-                <Button onClick={markComplete}><CheckCircle2 className="mr-1.5 h-4 w-4" /> Mark complete</Button>
+                <ActionButton onAction={saveDraft} variant="ghost" successLabel="Saved">Save draft</ActionButton>
+                <ActionButton onAction={markComplete} successLabel="Marked complete" icon={<CheckCircle2 className="mr-1.5 h-4 w-4" />}>Mark complete</ActionButton>
               </div>
             </div>
           </div>
@@ -387,30 +425,32 @@ function CaptionScheduleCard({ v }: { v: Video }) {
   const [tags, setTags] = useState(v.caption_hashtags.join(", "));
   const [date, setDate] = useState(v.posting_date ?? "");
   const [plat, setPlat] = useState<Platform>(v.posting_platform ?? v.platform[0] ?? "instagram");
+  const recent = useRecentlyUpdated();
+  const pulse = recent.has(v.id);
 
-  function saveCaptions() {
-    updateVideo(v.id, {
+  async function saveCaptions() {
+    await updateVideo(v.id, {
       caption_hook: hook, caption_body: body, caption_cta: cta,
       caption_hashtags: tags.split(",").map((t) => t.trim()).filter(Boolean),
     });
     toast.success("Captions saved");
   }
-  function schedule() {
-    if (!date) { toast.error("Pick a posting date"); return; }
-    updateVideo(v.id, { posting_date: date, posting_platform: plat, posting_status: "scheduled" });
-    toast.success(`Scheduled for ${date} on ${plat}`);
+  async function schedule() {
+    if (!date) { toast.error("Pick a posting date"); throw new Error("no date"); }
+    await updateVideo(v.id, { posting_date: date, posting_platform: plat, posting_status: "scheduled" });
+    toast.success(`Scheduled for ${date}`);
   }
-  function markPosted() {
-    updateVideo(v.id, { posting_status: "posted" });
+  async function markPosted() {
+    await updateVideo(v.id, { posting_status: "posted" });
     toast.success("Marked as posted");
   }
 
   return (
-    <Card className="sv-card-holo">
-      <CardContent className="p-5 space-y-4">
+    <Card className={cn("sv-card-holo", pulse && "sv-update-pulse")}>
+      <CardContent className="space-y-4 p-5">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="font-semibold">{v.title}</div>
+            <div className="font-display text-lg font-semibold">{v.title}</div>
             <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
               <PlatformList platforms={v.platform} />
               <span>·</span>
@@ -434,7 +474,7 @@ function CaptionScheduleCard({ v }: { v: Video }) {
             </div>
           </div>
         </div>
-        <div className="flex justify-end"><Button variant="secondary" onClick={saveCaptions}>Save captions</Button></div>
+        <div className="flex justify-end"><ActionButton onAction={saveCaptions} variant="secondary" successLabel="Saved">Save captions</ActionButton></div>
 
         <div className="rounded-lg border border-border bg-accent/30 p-3">
           <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground"><CalendarDays className="h-3.5 w-3.5" /> Schedule</div>
@@ -450,8 +490,10 @@ function CaptionScheduleCard({ v }: { v: Video }) {
               </Select>
             </div>
             <div className="flex items-end gap-2">
-              <Button className="flex-1" onClick={schedule}>Schedule</Button>
-              {v.posting_status === "scheduled" && <Button variant="secondary" onClick={markPosted}>Mark posted</Button>}
+              <ActionButton onAction={schedule} successLabel="Scheduled" className="flex-1">Schedule</ActionButton>
+              {v.posting_status === "scheduled" && (
+                <ActionButton onAction={markPosted} variant="secondary" successLabel="Posted">Mark posted</ActionButton>
+              )}
             </div>
           </div>
         </div>
@@ -469,8 +511,8 @@ function ManagerAnalytics() {
   const avgCompleted = active.length ? Math.round((posted.length / active.length) * 10) / 10 : 0;
 
   return (
-    <>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4 sv-stagger">
         <StatCard label="Posts published" value={posted.length} accent="success" />
         <StatCard label="Platforms connected" value={platformsConnected} accent="primary" />
         <StatCard label="Avg posts / client" value={avgCompleted as unknown as number} />
@@ -478,7 +520,7 @@ function ManagerAnalytics() {
       </div>
 
       <Card className="sv-card-holo">
-        <CardHeader><CardTitle className="text-base">Client overview</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="font-display text-xl">Client overview</CardTitle></CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -496,7 +538,7 @@ function ManagerAnalytics() {
                   const cv = videos.filter((v) => v.client_id === c.id);
                   const done = cv.filter((v) => v.posting_status === "posted").length;
                   const pct = c.active && cv.length ? Math.round((done / c.monthly_quota) * 100) : 0;
-                  const last = cv.filter((v) => v.posting_date).map((v) => v.posting_date!).sort().reverse()[0] ?? "—";
+                  const last = c.last_activity ? new Date(c.last_activity).toLocaleDateString() : "—";
                   return (
                     <tr key={c.id} className="border-b border-border last:border-0">
                       <td className="px-4 py-3 font-medium">{c.name}{!c.active && <Badge variant="secondary" className="ml-2 text-[10px]">Demo</Badge>}</td>
@@ -512,9 +554,6 @@ function ManagerAnalytics() {
           </div>
         </CardContent>
       </Card>
-    </>
+    </div>
   );
 }
-
-// keep ExternalLink import-used to avoid linter complaints
-void ExternalLink;
