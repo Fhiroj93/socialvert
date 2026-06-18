@@ -7,6 +7,8 @@ export type VideoType = "educational" | "authentic";
 export type VideoProductionStatus = "awaiting_recording" | "in_editing" | "ready";
 export type PostingStatus = "pending" | "scheduled" | "posted";
 
+export type ClientApprovalStatus = "approved" | "changes_requested" | null;
+
 export interface Client {
   id: string;
   name: string;
@@ -14,6 +16,7 @@ export interface Client {
   monthly_quota: number;
   platforms: Platform[];
   active: boolean; // false = demo placeholder client
+  last_activity?: string | null; // most-recent updated_at among this client's videos
 }
 
 export interface Video {
@@ -39,4 +42,7 @@ export interface Video {
   posting_status: PostingStatus;
   views: number;
   engagement: number;
+  client_approval_status: ClientApprovalStatus;
+  client_feedback: string | null;
+  updated_at: string | null;
 }
