@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogT
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { deriveStages, currentStageLabel } from "@/lib/mockData";
-import { useVideos, useClients, updateVideo, fetchClientBySlug, useRecentlyUpdated } from "@/lib/store";
+import { useVideos, useClients, updateVideo, fetchClientBySlug, useRecentlyUpdated } from "@/lib/liveStore";
 import { StageTracker } from "@/components/sv/StageTracker";
 import { QuotaRing } from "@/components/sv/QuotaRing";
 import { PlatformIcon, PlatformList } from "@/components/sv/PlatformIcon";

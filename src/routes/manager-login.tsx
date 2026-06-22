@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { ArrowLeft, KeyRound } from "lucide-react";
-import { DEMO_MANAGER_PASSCODE } from "@/lib/store";
+import { DEMO_MANAGER_PASSCODE } from "@/lib/liveStore";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/manager-login")({
