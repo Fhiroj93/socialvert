@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
-import { useClients, useVideos, updateVideo, addVideo, useRecentlyUpdated } from "@/lib/store";
+import { useClients, useVideos, updateVideo, addVideo, useRecentlyUpdated } from "@/lib/liveStore";
 import { deriveStages, currentStageLabel } from "@/lib/mockData";
 import { StageTracker } from "@/components/sv/StageTracker";
 import { PlatformIcon, PlatformList } from "@/components/sv/PlatformIcon";

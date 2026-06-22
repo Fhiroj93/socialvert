@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { ActionButton } from "./ActionButton";
-import { updateVideo } from "@/lib/store";
+import { updateVideo } from "@/lib/liveStore";
 import { toast } from "sonner";
 import type { Video } from "@/lib/types";
 

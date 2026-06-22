@@ -3,7 +3,7 @@ import { Logo } from "@/components/sv/Logo";
 import { ThemeToggle } from "@/components/sv/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Building2, ArrowRight } from "lucide-react";
-import { useClients } from "@/lib/store";
+import { useClients } from "@/lib/liveStore";
 import { PlatformList } from "@/components/sv/PlatformIcon";
 
 export const Route = createFileRoute("/client-login")({
