@@ -1,8 +1,17 @@
 // Supabase-backed store. Mirrors the previous in-memory hook API so UI components don't change.
 import { useSyncExternalStore } from "react";
-import { supabase as _supabase } from "@/integrations/supabase/client";
-const supabase = _supabase as any;
+import { createClient } from "@supabase/supabase-js";
 import type { Client, Video, Platform } from "./types";
+
+const LIVE_SUPABASE_URL = "https://esamgapbiqwfuwelyukt.supabase.co";
+const LIVE_SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVzYW1nYXBiaXF3ZnV3ZWx5dWt0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2ODgyMDcsImV4cCI6MjA5NzI2NDIwN30.dluyRkqY9EeIPE2gJPtxTCk4JyGDvs45aJ5LLfxiy90";
+
+const supabase = createClient(LIVE_SUPABASE_URL, LIVE_SUPABASE_PUBLISHABLE_KEY, {
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false,
+  },
+}) as any;
 
 // ---- Platform normalization (DB stores proper-case strings) ----
 const PLATFORM_TO_DB: Record<Platform, string> = {
