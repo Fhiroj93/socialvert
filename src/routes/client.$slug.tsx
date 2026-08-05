@@ -66,7 +66,9 @@ const SECTIONS: ShellSection[] = [
 ];
 
 function ClientDashboard() {
-  const { client: loaderClient } = Route.useLoaderData();
+  const loaderData = Route.useLoaderData();
+  if (!loaderData) return null;
+  const { client: loaderClient } = loaderData;
   const liveClient = useClients().find((c) => c.id === loaderClient.id);
   const client = liveClient ?? loaderClient;
   const allVideos = useVideos();
