@@ -2,6 +2,7 @@
 import { useSyncExternalStore } from "react";
 import { createClient } from "@supabase/supabase-js";
 import type { Client, Video, Platform } from "./types";
+import { fallbackClients, fallbackVideos } from "./mockData";
 
 const LIVE_SUPABASE_URL = "https://esamgapbiqwfuwelyukt.supabase.co";
 const LIVE_SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVzYW1nYXBiaXF3ZnV3ZWx5dWt0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2ODgyMDcsImV4cCI6MjA5NzI2NDIwN30.dluyRkqY9EeIPE2gJPtxTCk4JyGDvs45aJ5LLfxiy90";
@@ -128,8 +129,8 @@ async function loadOnce() {
     ]);
     if (cErr) console.error("[store] clients load", cErr);
     if (vErr) console.error("[store] videos load", vErr);
-    _clients = (c ?? []).map(normClient);
-    _videos = (v ?? []).map(normVideo);
+    _clients = cErr ? fallbackClients.map((client) => ({ ...client })) : (c ?? []).map(normClient);
+    _videos = vErr ? fallbackVideos.map((video) => ({ ...video })) : (v ?? []).map(normVideo);
     recomputeClientActivity();
     _loaded = true;
     emit();
