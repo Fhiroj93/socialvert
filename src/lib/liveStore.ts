@@ -74,8 +74,10 @@ function normVideo(row: any): Video {
   };
 }
 
-let _videos: Video[] = [];
-let _clients: Client[] = [];
+// Keep the last known snapshot immediately available. Live data replaces it in
+// the background, so navigation never waits on a slow or unavailable network.
+let _videos: Video[] = fallbackVideos.map((video) => ({ ...video }));
+let _clients: Client[] = fallbackClients.map((client) => ({ ...client }));
 let _loaded = false;
 let _loading: Promise<void> | null = null;
 let _realtimeSetup = false;
@@ -84,6 +86,13 @@ const _pulseTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((l) => l());
+const REQUEST_TIMEOUT_MS = 2500;
+
+function requestSignal() {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  return { signal: controller.signal, clear: () => clearTimeout(timeout) };
+}
 
 function recomputeClientActivity() {
   const lastByClient = new Map<string, string>();
@@ -123,17 +132,22 @@ async function loadOnce() {
   if (_loaded) return;
   if (_loading) return _loading;
   _loading = (async () => {
-    const [{ data: c, error: cErr }, { data: v, error: vErr }] = await Promise.all([
-      supabase.from("clients").select("*").order("name"),
-      supabase.from("videos").select("*"),
-    ]);
-    if (cErr) console.error("[store] clients load", cErr);
-    if (vErr) console.error("[store] videos load", vErr);
-    _clients = cErr ? fallbackClients.map((client) => ({ ...client })) : (c ?? []).map(normClient);
-    _videos = vErr ? fallbackVideos.map((video) => ({ ...video })) : (v ?? []).map(normVideo);
-    recomputeClientActivity();
-    _loaded = true;
-    emit();
+    const request = requestSignal();
+    try {
+      const [{ data: c, error: cErr }, { data: v, error: vErr }] = await Promise.all([
+        supabase.from("clients").select("*").order("name").abortSignal(request.signal),
+        supabase.from("videos").select("*").abortSignal(request.signal),
+      ]);
+      if (cErr) console.error("[store] clients load", cErr);
+      if (vErr) console.error("[store] videos load", vErr);
+      if (!cErr) _clients = (c ?? []).map(normClient);
+      if (!vErr) _videos = (v ?? []).map(normVideo);
+      recomputeClientActivity();
+      emit();
+    } finally {
+      request.clear();
+      _loaded = true;
+    }
 
     if (!_realtimeSetup && typeof window !== "undefined") {
       _realtimeSetup = true;
@@ -186,9 +200,19 @@ export function useRecentlyUpdated(): Set<string> {
 export async function fetchClientBySlug(slug: string): Promise<Client | null> {
   const cached = _clients.find((c) => c.slug === slug);
   if (cached) return cached;
-  const { data, error } = await supabase.from("clients").select("*").eq("slug", slug).maybeSingle();
-  if (error || !data) return null;
-  return normClient(data);
+  const request = requestSignal();
+  try {
+    const { data, error } = await supabase
+      .from("clients")
+      .select("*")
+      .eq("slug", slug)
+      .maybeSingle()
+      .abortSignal(request.signal);
+    if (error || !data) return null;
+    return normClient(data);
+  } finally {
+    request.clear();
+  }
 }
 
 export async function updateVideo(id: string, patch: Partial<Video>) {
@@ -206,8 +230,13 @@ export async function updateVideo(id: string, patch: Partial<Video>) {
   // updated_at handled by DB trigger if present; don't send.
   delete dbPatch.updated_at;
 
-  const { error } = await supabase.from("videos").update(dbPatch).eq("id", id);
-  if (error) console.error("[store] updateVideo", error);
+  const request = requestSignal();
+  try {
+    const { error } = await supabase.from("videos").update(dbPatch).eq("id", id).abortSignal(request.signal);
+    if (error) console.error("[store] updateVideo", error);
+  } finally {
+    request.clear();
+  }
 }
 
 export async function addVideo(v: Video) {
@@ -234,7 +263,9 @@ export async function addVideo(v: Video) {
     views: v.views,
     engagement: v.engagement,
   };
-  const { data, error } = await supabase.from("videos").insert(dbRow).select().single();
+  const request = requestSignal();
+  const { data, error } = await supabase.from("videos").insert(dbRow).select().single().abortSignal(request.signal);
+  request.clear();
   if (error) {
     console.error("[store] addVideo", error);
     return;
