@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { Logo } from "@/components/sv/Logo";
 import { ThemeToggle } from "@/components/sv/ThemeToggle";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,6 @@ export const Route = createFileRoute("/client-login")({
 });
 
 function ClientLogin() {
-  const navigate = useNavigate();
   const list = useClients().filter((c) => c.active);
 
   return (
@@ -31,9 +30,11 @@ function ClientLogin() {
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           {list.map((c) => (
-            <button
+            <Link
               key={c.id}
-              onClick={() => navigate({ to: "/client/$slug", params: { slug: c.slug } })}
+              to="/client/$slug"
+              params={{ slug: c.slug }}
+              preload="intent"
               className="sv-card-holo group rounded-2xl p-6 text-left"
             >
               <div className="mb-4 grid h-12 w-12 place-items-center rounded-xl bg-primary/10 text-primary">
@@ -45,7 +46,7 @@ function ClientLogin() {
                 <PlatformList platforms={c.platforms} />
                 <ArrowRight className="h-4 w-4 text-primary transition-transform group-hover:translate-x-1" />
               </div>
-            </button>
+            </Link>
           ))}
         </div>
       </div>
