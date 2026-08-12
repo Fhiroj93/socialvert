@@ -1,9 +1,9 @@
-import logoAsset from "@/assets/socialvert-logo.webp.asset.json";
+import logoUrl from "@/assets/socialvert-logo.webp";
 
 export function LogoMark({ className = "h-7 w-7" }: { className?: string }) {
   return (
     <img
-      src={logoAsset.url}
+      src={logoUrl}
       alt="Socialvert"
       className={`${className} object-contain drop-shadow-[0_0_12px_oklch(0.62_0.22_264_/_0.45)] transition-transform duration-500 hover:scale-110 hover:rotate-[6deg]`}
     />
