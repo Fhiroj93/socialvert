@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import type { Video } from "@/lib/types";
+import type { Video, Client as ClientType } from "@/lib/types";
 import { BarChart, Bar, ResponsiveContainer, XAxis, Tooltip, CartesianGrid } from "recharts";
 
 export const Route = createFileRoute("/client/$slug")({
