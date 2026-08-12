@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import type { Video } from "@/lib/types";
+import type { Video, Client as ClientType } from "@/lib/types";
 import { BarChart, Bar, ResponsiveContainer, XAxis, Tooltip, CartesianGrid } from "recharts";
 
 export const Route = createFileRoute("/client/$slug")({
@@ -66,10 +66,10 @@ const SECTIONS: ShellSection[] = [
 ];
 
 function ClientDashboard() {
-  const loaderData = Route.useLoaderData();
-  if (!loaderData) return null;
-  const { client: loaderClient } = loaderData;
-  const liveClient = useClients().find((c) => c.id === loaderClient.id);
+  const loaderData = Route.useLoaderData() as { client: ClientType } | undefined;
+  const loaderClient = loaderData?.client;
+  const liveClient = useClients().find((c) => c.id === loaderClient?.id);
+  if (!loaderClient) return null;
   const client = liveClient ?? loaderClient;
   const allVideos = useVideos();
   const videos = useMemo(() => allVideos.filter((v) => v.client_id === client.id), [allVideos, client.id]);
