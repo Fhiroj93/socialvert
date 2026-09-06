@@ -9,7 +9,7 @@ SocialVert manages content production for 40+ clients every month. Before this, 
 ## Live Links
 
 - **Client Dashboard:** https://social-vert.netlify.app/client-login
-- **Manager Dashboard:** [https://socialvert.lovable.app/manager](https://social-vert.netlify.app/manager-login)
+- **Manager Dashboard:** https://social-vert.netlify.app/manager-login
 
 ## The Experience
 
